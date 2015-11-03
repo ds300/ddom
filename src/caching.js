@@ -24,7 +24,7 @@ function lookupCursor(id2idx, id) {
         }
     };
 }
-var NOT_FOUND = {};
+var NOT_FOUND = [];
 function ucmap(uf, f, xs) {
     var cache = immutable_1.Map();
     var _a = deriveIDStuff(uf, xs), ids = _a.ids, id2idx = _a.id2idx;
@@ -32,17 +32,24 @@ function ucmap(uf, f, xs) {
         var newCache = immutable_1.Map().asMutable();
         var result = [];
         ids.forEach(function (id) {
-            var value = newCache.get(id, NOT_FOUND);
-            if (value === NOT_FOUND) {
-                value = cache.get(id, NOT_FOUND);
-                if (value === NOT_FOUND) {
-                    var deriv = _.isAtom(xs) ? xs.lens(lookupCursor(id2idx, id)) : xs.derive(lookup, id2idx, id);
-                    var idx = id2idx.derive(function (id2idx) { return id2idx.get(id); });
-                    value = f(deriv, idx);
-                }
-                newCache.set(id, value);
+            var existing = cache.get(id);
+            var value;
+            if (existing != null && existing.length > 0) {
+                value = existing.shift();
+            }
+            else {
+                var deriv = _.isAtom(xs) ? xs.lens(lookupCursor(id2idx, id)) : xs.derive(lookup, id2idx, id);
+                var idx = id2idx.derive(function (id2idx) { return id2idx.get(id); });
+                value = f(deriv, idx);
             }
             result.push(value);
+            var newItems = newCache.get(id);
+            if (newItems) {
+                newItems.push(value);
+            }
+            else {
+                newCache.set(id, [value]);
+            }
         });
         cache = newCache.asImmutable();
         return immutable_1.List(result);

@@ -38,7 +38,7 @@ function lookupCursor<T, U>(
   }
 }
 
-const NOT_FOUND = {};
+const NOT_FOUND = [];
 
 export function ucmap<I, O, U>(
     uf: (i: I) => U,
@@ -46,27 +46,34 @@ export function ucmap<I, O, U>(
     xs: Derivable<List<I>>
   ): Derivable<List<O>> {
 
-  let cache: Map<U, O> = Map<U, O>();
+  let cache: Map<U, O[]> = Map<U, O[]>();
 
   const {ids, id2idx} = deriveIDStuff<I, U>(uf, xs);
 
   return ids.derive(ids => {
-    let newCache = Map<U, O>().asMutable();
+    let newCache = Map<U, O[]>().asMutable();
     let result = [];
 
     ids.forEach(id => {
       // allow duplicates
-      let value: O = newCache.get(id, <O>NOT_FOUND);
-      if (value === NOT_FOUND) {
-        value = cache.get(id, <O>NOT_FOUND);
-        if (value === NOT_FOUND) {
-          var deriv = _.isAtom(xs) ? (<Atom<List<I>>>xs).lens(lookupCursor<I, U>(id2idx, id)) : xs.derive(lookup, id2idx, id);
-          var idx = id2idx.derive(id2idx => id2idx.get(id));
-          value = f(deriv, idx);
-        }
-        newCache.set(id, value);
+      let existing = cache.get(id);
+      let value;
+      if (existing != null && existing.length > 0) {
+        value = existing.shift();
+
+      } else {
+        var deriv = _.isAtom(xs) ? (<Atom<List<I>>>xs).lens(lookupCursor<I, U>(id2idx, id)) : xs.derive(lookup, id2idx, id);
+        var idx = id2idx.derive(id2idx => id2idx.get(id));
+        value = f(deriv, idx);
       }
       result.push(value);
+      let newItems = newCache.get(id);
+      if (newItems) {
+        newItems.push(value);
+      } else {
+        newCache.set(id, [value]);
+      }
+      
     });
 
     cache = newCache.asImmutable();

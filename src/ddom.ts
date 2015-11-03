@@ -25,7 +25,6 @@ const customPropertyHandlers = {
   },
   $show: function (node: HTMLElement, val) {
     if (_.isDerivable(val)) {
-      val.react(x => console.log("thing is", x))
       lifecycle(node, val.reactor(v => node.style.display = v ? null : 'none'));
     } else {
       node.style.display = val ? null : 'none';
@@ -43,6 +42,10 @@ const customPropertyHandlers = {
 
 const IN_DOM = '__ddom__elemInDom';
 const PARENT = '__ddom__elemParent';
+const KIDS = '__ddom__kids';
+const CURRENT_KIDS = '__ddom__current__kids';
+const TREE = '__ddom__tree';
+const CURRENT_SUBTREE = '__ddom__current__subtree';
 
 function ensureChildState(child: HTMLElement) {
   if (child && child !== document.body && !child[PARENT]) {
@@ -118,7 +121,7 @@ function flattenKids (thing: any): any[] {
   return result;
 }
 
-function buildKids (nodeCache: I.Map<string, Node[]>, kids: any[]): [Node[], I.Map<any, Node[]>] {
+function buildKidNodes (nodeCache: I.Map<string, Node[]>, kids: any[]): [Node[], I.Map<any, Node[]>] {
   const result = [];
   const newCache = I.Map<any, Node[]>().asMutable();
   for (let kid of kids) {
@@ -146,54 +149,34 @@ function buildKids (nodeCache: I.Map<string, Node[]>, kids: any[]): [Node[], I.M
   return [result, newCache.asImmutable()];
 }
 
-type Insertion = {
-  parent: Node,
-  before: Node
-};
+function remove(kid: ChildNode) {
+  kid.remove();
+  if (kid instanceof HTMLElement) {
+    kid[PARENT].set(null);
+  }
+}
 
-let _RESTRUCTURINGS_: I.OrderedMap<Node, Insertion>;
-let _removals_: I.OrderedSet<ChildNode>;
+function insert(parent: HTMLElement, node: Node, before: Node) {
+  parent.insertBefore(node, before);
+  if (node instanceof HTMLElement) {
+    ensureChildState(node);
+    node[PARENT].set(parent);
+  }
+}
 
-function withRestructurings (f: () => void) {
-  if (_RESTRUCTURINGS_) {
-    f();
-  } else {
-    _RESTRUCTURINGS_ = I.OrderedMap<Node, Insertion>().asMutable();
-    _removals_ = I.OrderedSet<ChildNode>().asMutable();
-    try {
-      f();
-    } finally {
-      setTimeout(() => {
-        _removals_.forEach(kid => {
-          kid.remove();
-          if (kid instanceof HTMLElement) {
-            kid[PARENT].set(null);
-          }
-        });
-        _RESTRUCTURINGS_.forEach(({parent, before}, node: Node) => {
-          parent.insertBefore(node, before);
-          if (node instanceof HTMLElement) {
-            ensureChildState(node);
-            node[PARENT].set(parent);
-          }
-        });
-        _RESTRUCTURINGS_ = null;
-        _removals_ = null;
-      }, 0);
+function buildTree(nodes: Node[]) {
+  const result = [];
+  for (var i = 0, len = nodes.length; i < len; i++) {
+    let node = nodes[i];
+    if (node instanceof HTMLElement && node[TREE]) {
+      result.push(node[TREE].get());
+    } else {
+      result.push(node);
     }
   }
+  return result;
 }
 
-function addRestructuring(parent: Node, kid: Node, before: Node) {
-  if (_RESTRUCTURINGS_.has(kid)) {
-    console.error("Node found at more than one location in the DOM: ", kid);
-  }
-  _RESTRUCTURINGS_.set(kid, {parent, before});
-}
-
-function addRemoval(kid: ChildNode) {
-  _removals_.add(kid);
-}
 
 /**
  * Creates a VDOM node from the given spec. jsx pluggable
@@ -228,50 +211,71 @@ export function dom(tagName: string, props: any, ...children: any[]): HTMLElemen
   }
 
   if (children.length) {
-    const flattened = _.atom(children).derive(flattenKids);
-
-    let nodeCache = I.Map<string, Node[]>();
-    let currentKids = [];
-
-    lifecycle(result, flattened.reactor(flattened => {
-      withRestructurings(() => {
-        let [newKids, newCache] = buildKids(nodeCache, flattened);
-        nodeCache = newCache;
-
-        let lcs = util.longestCommonSubsequence(currentKids, newKids);
-
-        let i = 0, j = 0;
-        lcs.forEach(sharedKid => {
-          while (currentKids[i] !== sharedKid) {
-            addRemoval(currentKids[i++]);
-          }
-          i++
-          while (newKids[j] !== sharedKid) {
-            let kid = newKids[j++];
-            addRestructuring(result, kid, sharedKid);
-          }
-          j++
-        });
-        while (i < currentKids.length) {
-          addRemoval(currentKids[i++]);
-        }
-        while (j < newKids.length) {
-          let kid = newKids[j++];
-          addRestructuring(result, kid, null);
-        }
-
-        currentKids = newKids;
-      })
-    }));
+    let textNodeCache = I.Map<string, Node[]>();
+    result[KIDS] = _.derivation(() => flattenKids(children)).derive(items => {
+      let [nodes, newCache] = buildKidNodes(textNodeCache, items);
+      textNodeCache = newCache;
+      return nodes;
+    });
+    result[CURRENT_KIDS] = [];
+    result[TREE] = result[KIDS].derive(kids => [result, kids, buildTree(kids)]);
+    result[CURRENT_SUBTREE] = [];
   }
 
   return result;
 }
+
+function processTree(tree) {
+  if (tree instanceof Array) {
+    let [node, newKids, subTree] = tree;
+    let currentKids = node[CURRENT_KIDS];
+    if (newKids !== currentKids) {
+
+      let lcs = util.longestCommonSubsequence(currentKids, newKids);
+
+      let i = 0, j = 0;
+      lcs.forEach(sharedKid => {
+        while (currentKids[i] !== sharedKid) {
+          remove(currentKids[i++]);
+        }
+        i++
+        while (newKids[j] !== sharedKid) {
+          let kid = newKids[j++];
+          insert(node, kid, sharedKid);
+        }
+        j++
+      });
+      while (i < currentKids.length) {
+        remove(currentKids[i++]);
+      }
+      while (j < newKids.length) {
+        let kid = newKids[j++];
+        insert(node, kid, null);
+      }
+
+      node[CURRENT_KIDS] = newKids;
+    }
+
+
+    let currentSubTree = node[CURRENT_SUBTREE];
+    if (currentSubTree !== subTree) {
+      subTree.forEach(processTree);
+      node[CURRENT_SUBTREE] = subTree;
+    }
+  }
+}
+
 
 export function root(parent: HTMLElement, child:Node) {
   parent.appendChild(child);
   if (child instanceof HTMLElement) {
     ensureChildState(child);
     child[PARENT].set(parent);
+    const tree = child[TREE];
+    if (tree) {
+      tree.react(_.transaction(tree => {
+        processTree(tree);
+      }));
+    }
   }
 }

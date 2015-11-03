@@ -420,6 +420,16 @@ function orphan (base) {
   }
 }
 
+function adopt (parentBase, childBase) {
+  orphan(childBase);
+  if (parentBase.active) {
+    childBase.parentReactor = parentBase;
+    util_addToArray(parentBase.dependentReactors, childBase);
+  } else {
+    stop(childBase);
+  }
+}
+
 function reactors_maybeReact (base) {
   if (base.yielding) {
     throw Error(cycleMsg);
@@ -503,6 +513,13 @@ util_extend(reactors_Reactor.prototype, {
   },
   orphan: function () {
     orphan(this._base);
+    return this;
+  },
+  adopt: function (child) {
+    if (child._type !== types_REACTION) {
+      throw Error("reactors can only adopt reactors");
+    }
+    adopt(this._base, child._base);
     return this;
   }
 });
@@ -6232,7 +6249,7 @@ function lookupCursor(id2idx, id) {
         }
     };
 }
-var NOT_FOUND = {};
+var NOT_FOUND = [];
 function ucmap(uf, f, xs) {
     var cache = immutable_1.Map();
     var _a = deriveIDStuff(uf, xs), ids = _a.ids, id2idx = _a.id2idx;
@@ -6240,17 +6257,24 @@ function ucmap(uf, f, xs) {
         var newCache = immutable_1.Map().asMutable();
         var result = [];
         ids.forEach(function (id) {
-            var value = newCache.get(id, NOT_FOUND);
-            if (value === NOT_FOUND) {
-                value = cache.get(id, NOT_FOUND);
-                if (value === NOT_FOUND) {
-                    var deriv = _.isAtom(xs) ? xs.lens(lookupCursor(id2idx, id)) : xs.derive(lookup, id2idx, id);
-                    var idx = id2idx.derive(function (id2idx) { return id2idx.get(id); });
-                    value = f(deriv, idx);
-                }
-                newCache.set(id, value);
+            var existing = cache.get(id);
+            var value;
+            if (existing != null && existing.length > 0) {
+                value = existing.shift();
+            }
+            else {
+                var deriv = _.isAtom(xs) ? xs.lens(lookupCursor(id2idx, id)) : xs.derive(lookup, id2idx, id);
+                var idx = id2idx.derive(function (id2idx) { return id2idx.get(id); });
+                value = f(deriv, idx);
             }
             result.push(value);
+            var newItems = newCache.get(id);
+            if (newItems) {
+                newItems.push(value);
+            }
+            else {
+                newCache.set(id, [value]);
+            }
         });
         cache = newCache.asImmutable();
         return immutable_1.List(result);
@@ -6292,7 +6316,6 @@ var customPropertyHandlers = {
     },
     $show: function (node, val) {
         if (_.isDerivable(val)) {
-            val.react(function (x) { return console.log("thing is", x); });
             lifecycle(node, val.reactor(function (v) { return node.style.display = v ? null : 'none'; }));
         }
         else {
@@ -6310,6 +6333,10 @@ var customPropertyHandlers = {
 };
 var IN_DOM = '__ddom__elemInDom';
 var PARENT = '__ddom__elemParent';
+var KIDS = '__ddom__kids';
+var CURRENT_KIDS = '__ddom__current__kids';
+var TREE = '__ddom__tree';
+var CURRENT_SUBTREE = '__ddom__current__subtree';
 function ensureChildState(child) {
     if (child && child !== document.body && !child[PARENT]) {
         child[PARENT] = _.atom(ensureChildState(child.parentElement));
@@ -6381,7 +6408,7 @@ function flattenKids(thing) {
     descend(thing);
     return result;
 }
-function buildKids(nodeCache, kids) {
+function buildKidNodes(nodeCache, kids) {
     var result = [];
     var newCache = I.Map().asMutable();
     for (var _i = 0; _i < kids.length; _i++) {
@@ -6410,48 +6437,31 @@ function buildKids(nodeCache, kids) {
     }
     return [result, newCache.asImmutable()];
 }
-var _RESTRUCTURINGS_;
-var _removals_;
-function withRestructurings(f) {
-    if (_RESTRUCTURINGS_) {
-        f();
-    }
-    else {
-        _RESTRUCTURINGS_ = I.OrderedMap().asMutable();
-        _removals_ = I.OrderedSet().asMutable();
-        try {
-            f();
-        }
-        finally {
-            setTimeout(function () {
-                _removals_.forEach(function (kid) {
-                    kid.remove();
-                    if (kid instanceof HTMLElement) {
-                        kid[PARENT].set(null);
-                    }
-                });
-                _RESTRUCTURINGS_.forEach(function (_a, node) {
-                    var parent = _a.parent, before = _a.before;
-                    parent.insertBefore(node, before);
-                    if (node instanceof HTMLElement) {
-                        ensureChildState(node);
-                        node[PARENT].set(parent);
-                    }
-                });
-                _RESTRUCTURINGS_ = null;
-                _removals_ = null;
-            }, 0);
-        }
+function remove(kid) {
+    kid.remove();
+    if (kid instanceof HTMLElement) {
+        kid[PARENT].set(null);
     }
 }
-function addRestructuring(parent, kid, before) {
-    if (_RESTRUCTURINGS_.has(kid)) {
-        console.error("Node found at more than one location in the DOM: ", kid);
+function insert(parent, node, before) {
+    parent.insertBefore(node, before);
+    if (node instanceof HTMLElement) {
+        ensureChildState(node);
+        node[PARENT].set(parent);
     }
-    _RESTRUCTURINGS_.set(kid, { parent: parent, before: before });
 }
-function addRemoval(kid) {
-    _removals_.add(kid);
+function buildTree(nodes) {
+    var result = [];
+    for (var i = 0, len = nodes.length; i < len; i++) {
+        var node = nodes[i];
+        if (node instanceof HTMLElement && node[TREE]) {
+            result.push(node[TREE].get());
+        }
+        else {
+            result.push(node);
+        }
+    }
+    return result;
 }
 function dom(tagName, props) {
     var children = [];
@@ -6488,45 +6498,64 @@ function dom(tagName, props) {
         }
     }
     if (children.length) {
-        var flattened = _.atom(children).derive(flattenKids);
-        var nodeCache = I.Map();
-        var currentKids = [];
-        lifecycle(result, flattened.reactor(function (flattened) {
-            withRestructurings(function () {
-                var _a = buildKids(nodeCache, flattened), newKids = _a[0], newCache = _a[1];
-                nodeCache = newCache;
-                var lcs = util.longestCommonSubsequence(currentKids, newKids);
-                var i = 0, j = 0;
-                lcs.forEach(function (sharedKid) {
-                    while (currentKids[i] !== sharedKid) {
-                        addRemoval(currentKids[i++]);
-                    }
-                    i++;
-                    while (newKids[j] !== sharedKid) {
-                        var kid = newKids[j++];
-                        addRestructuring(result, kid, sharedKid);
-                    }
-                    j++;
-                });
-                while (i < currentKids.length) {
-                    addRemoval(currentKids[i++]);
-                }
-                while (j < newKids.length) {
-                    var kid = newKids[j++];
-                    addRestructuring(result, kid, null);
-                }
-                currentKids = newKids;
-            });
-        }));
+        var textNodeCache = I.Map();
+        result[KIDS] = _.derivation(function () { return flattenKids(children); }).derive(function (items) {
+            var _a = buildKidNodes(textNodeCache, items), nodes = _a[0], newCache = _a[1];
+            textNodeCache = newCache;
+            return nodes;
+        });
+        result[CURRENT_KIDS] = [];
+        result[TREE] = result[KIDS].derive(function (kids) { return [result, kids, buildTree(kids)]; });
+        result[CURRENT_SUBTREE] = [];
     }
     return result;
 }
 exports.dom = dom;
+function processTree(tree) {
+    if (tree instanceof Array) {
+        var node = tree[0], newKids = tree[1], subTree = tree[2];
+        var currentKids = node[CURRENT_KIDS];
+        if (newKids !== currentKids) {
+            var lcs = util.longestCommonSubsequence(currentKids, newKids);
+            var i = 0, j = 0;
+            lcs.forEach(function (sharedKid) {
+                while (currentKids[i] !== sharedKid) {
+                    remove(currentKids[i++]);
+                }
+                i++;
+                while (newKids[j] !== sharedKid) {
+                    var kid = newKids[j++];
+                    insert(node, kid, sharedKid);
+                }
+                j++;
+            });
+            while (i < currentKids.length) {
+                remove(currentKids[i++]);
+            }
+            while (j < newKids.length) {
+                var kid = newKids[j++];
+                insert(node, kid, null);
+            }
+            node[CURRENT_KIDS] = newKids;
+        }
+        var currentSubTree = node[CURRENT_SUBTREE];
+        if (currentSubTree !== subTree) {
+            subTree.forEach(processTree);
+            node[CURRENT_SUBTREE] = subTree;
+        }
+    }
+}
 function root(parent, child) {
     parent.appendChild(child);
     if (child instanceof HTMLElement) {
         ensureChildState(child);
         child[PARENT].set(parent);
+        var tree = child[TREE];
+        if (tree) {
+            tree.react(_.transaction(function (tree) {
+                processTree(tree);
+            }));
+        }
     }
 }
 exports.root = root;
@@ -6607,17 +6636,31 @@ var caching_1 = require('../src/caching');
 var immutable_1 = require('immutable');
 var derivable_1 = require('derivable');
 var React = { createElement: ddom_1.dom };
-var things = derivable_1.atom(immutable_1.List([1, 2, 3, 4, 5]));
-var thing = React.createElement("div", {"$class": things.derive(function (t) { return t.size + "balls"; })}, "hello world! ", caching_1.cmap(function (x) { return x.derive(function (x) { return x * 2; }); }, things), " ");
-window.addEventListener('load', function () { return ddom_1.root(document.body, thing); });
+var things = derivable_1.atom(immutable_1.List([1, 2]));
+var time = derivable_1.atom(+new Date());
+setInterval(function () { return time.set(+new Date()); }, 50);
+var seconds = time.derive(function (t) { return t - (t % 1000); });
+var blink = time.derive(function (t) { return Math.round(t / 250) % 2 == 0; });
+function renderNumber(n, i) {
+    var even = i.derive(function (i) { return i % 2 == 0; });
+    var color = even.then(blink, true).then('black', 'white');
+    return React.createElement("span", null, n.derive(function (n) { return n * 2; }));
+}
+var thing = React.createElement("div", null, caching_1.cmap(renderNumber, things));
 window.addEventListener('keypress', derivable_1.transaction(function (ev) {
-    things.swap(function (things) { return things.update(0, function (x) { return x + 1; }); });
+    things.swap(function (things) { return things.size ? things.update(0, function (x) { return x + 1; }) : things; });
     if (ev.shiftKey) {
+        console.log("shibnitsz");
         things.swap(function (x) { return x.unshift(1); });
     }
     else if (ev.altKey) {
+        console.log("flatularnce");
         things.swap(function (x) { return x.shift(); });
     }
 }));
+var page = (React.createElement("div", null, "The time is now ", seconds.derive(function (t) { return new Date(t).toString(); }), thing));
+window.addEventListener('load', function () {
+    ddom_1.root(document.body, thing);
+});
 
 },{"../src/caching":3,"../src/ddom":4,"derivable":1,"immutable":2}]},{},[6]);
