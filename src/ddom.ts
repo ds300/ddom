@@ -83,10 +83,6 @@ export function lifecycle(child: HTMLElement, onMount, onUnmount?) {
       }
     }).start();
   }
-
-  if (child[IN_DOM].get()) {
-    r.force();
-  }
 }
 
 export const renderable = Symbol('ddom_renderable');

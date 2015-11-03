@@ -78,9 +78,6 @@ function lifecycle(child, onMount, onUnmount) {
             }
         }).start();
     }
-    if (child[IN_DOM].get()) {
-        r.force();
-    }
 }
 exports.lifecycle = lifecycle;
 exports.renderable = Symbol('ddom_renderable');
