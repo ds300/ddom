@@ -225,26 +225,26 @@ function processTree(tree) {
         var node = tree[0], newKids = tree[1], subTree = tree[2];
         var currentKids = node[CURRENT_KIDS];
         if (newKids !== currentKids) {
+            var text = function (x) { return x.textContent; };
             var lcs = util.longestCommonSubsequence(currentKids, newKids);
-            var i = 0, j = 0;
-            lcs.forEach(function (sharedKid) {
-                while (currentKids[i] !== sharedKid) {
-                    remove(currentKids[i++]);
+            var x = 0;
+            currentKids.forEach(function (ck) {
+                if (ck !== lcs[x]) {
+                    remove(ck);
                 }
-                i++;
-                while (newKids[j] !== sharedKid) {
-                    var kid = newKids[j++];
-                    insert(node, kid, sharedKid);
+                else {
+                    x++;
                 }
-                j++;
             });
-            while (i < currentKids.length) {
-                remove(currentKids[i++]);
-            }
-            while (j < newKids.length) {
-                var kid = newKids[j++];
-                insert(node, kid, null);
-            }
+            x = 0;
+            newKids.forEach(function (nk) {
+                if (nk !== lcs[x]) {
+                    insert(node, nk, lcs[x]);
+                }
+                else {
+                    x++;
+                }
+            });
             node[CURRENT_KIDS] = newKids;
         }
         var currentSubTree = node[CURRENT_SUBTREE];

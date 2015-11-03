@@ -231,28 +231,25 @@ function processTree(tree) {
     let currentKids = node[CURRENT_KIDS];
     if (newKids !== currentKids) {
 
+      const text = x => x.textContent
       let lcs = util.longestCommonSubsequence(currentKids, newKids);
 
-      let i = 0, j = 0;
-      lcs.forEach(sharedKid => {
-        while (currentKids[i] !== sharedKid) {
-          remove(currentKids[i++]);
+      let x = 0;
+      currentKids.forEach(ck => {
+        if (ck !== lcs[x]) {
+          remove(ck);
+        } else {
+          x++;
         }
-        i++
-        while (newKids[j] !== sharedKid) {
-          let kid = newKids[j++];
-          insert(node, kid, sharedKid);
-        }
-        j++
       });
-      while (i < currentKids.length) {
-        remove(currentKids[i++]);
-      }
-      while (j < newKids.length) {
-        let kid = newKids[j++];
-        insert(node, kid, null);
-      }
-
+      x = 0;
+      newKids.forEach(nk => {
+        if (nk !== lcs[x]) {
+          insert(node, nk, lcs[x]);
+        } else {
+          x++;
+        }
+      });
       node[CURRENT_KIDS] = newKids;
     }
 

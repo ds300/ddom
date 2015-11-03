@@ -26,10 +26,8 @@ const thing = <div>{cmap(renderNumber, things)}</div>;
 window.addEventListener('keypress', transaction(ev => {
   things.swap(things => things.size ? things.update(0, x => x + 1) : things);
   if (ev.shiftKey) {
-    console.log("shibnitsz");
     things.swap(x => x.unshift(1));
   } else if (ev.altKey) {
-    console.log("flatularnce");
     things.swap(x => x.shift());
   }
 }));

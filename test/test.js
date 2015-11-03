@@ -17,11 +17,9 @@ var thing = React.createElement("div", null, caching_1.cmap(renderNumber, things
 window.addEventListener('keypress', derivable_1.transaction(function (ev) {
     things.swap(function (things) { return things.size ? things.update(0, function (x) { return x + 1; }) : things; });
     if (ev.shiftKey) {
-        console.log("shibnitsz");
         things.swap(function (x) { return x.unshift(1); });
     }
     else if (ev.altKey) {
-        console.log("flatularnce");
         things.swap(function (x) { return x.shift(); });
     }
 }));
