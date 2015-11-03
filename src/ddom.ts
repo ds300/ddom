@@ -95,24 +95,26 @@ function flattenKids (thing: any): any[] {
   const result = [];
 
   function descend (thing: any) {
-    if (_.isDerivable(thing)) {
-      descend(thing.get());
-    } else if (thing instanceof Array) {
-      for (let i = 0; i < thing.length; i++) {
-        descend(thing[i]);
+    if (thing != null) {
+      if (_.isDerivable(thing)) {
+        descend(thing.get());
+      } else if (thing instanceof Array) {
+        for (let i = 0; i < thing.length; i++) {
+          descend(thing[i]);
+        }
+      } else if (thing instanceof I.List) {
+        thing.forEach(descend);
+      } else if (typeof thing === 'string' || thing instanceof String) {
+        result.push(thing);
+      } else if (thing[renderable]){
+        descend(thing[renderable]());
+      } else if (thing[Symbol.iterator]) {
+        for (let item of thing) {
+          descend(item);
+        }
+      } else {
+        result.push(thing);
       }
-    } else if (thing instanceof I.List) {
-      thing.forEach(descend);
-    } else if (typeof thing === 'string' || thing instanceof String) {
-      result.push(thing);
-    } else if (thing[renderable]){
-      descend(thing[renderable]());
-    } else if (thing[Symbol.iterator]) {
-      for (let item of thing) {
-        descend(item);
-      }
-    } else if (thing != null) {
-      result.push(thing);
     }
   }
 

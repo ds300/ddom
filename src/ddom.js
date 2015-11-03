@@ -87,31 +87,33 @@ exports.renderable = Symbol('ddom_renderable');
 function flattenKids(thing) {
     var result = [];
     function descend(thing) {
-        if (_.isDerivable(thing)) {
-            descend(thing.get());
-        }
-        else if (thing instanceof Array) {
-            for (var i = 0; i < thing.length; i++) {
-                descend(thing[i]);
+        if (thing != null) {
+            if (_.isDerivable(thing)) {
+                descend(thing.get());
             }
-        }
-        else if (thing instanceof I.List) {
-            thing.forEach(descend);
-        }
-        else if (typeof thing === 'string' || thing instanceof String) {
-            result.push(thing);
-        }
-        else if (thing[exports.renderable]) {
-            descend(thing[exports.renderable]());
-        }
-        else if (thing[Symbol.iterator]) {
-            for (var _i = 0; _i < thing.length; _i++) {
-                var item = thing[_i];
-                descend(item);
+            else if (thing instanceof Array) {
+                for (var i = 0; i < thing.length; i++) {
+                    descend(thing[i]);
+                }
             }
-        }
-        else if (thing != null) {
-            result.push(thing);
+            else if (thing instanceof I.List) {
+                thing.forEach(descend);
+            }
+            else if (typeof thing === 'string' || thing instanceof String) {
+                result.push(thing);
+            }
+            else if (thing[exports.renderable]) {
+                descend(thing[exports.renderable]());
+            }
+            else if (thing[Symbol.iterator]) {
+                for (var _i = 0; _i < thing.length; _i++) {
+                    var item = thing[_i];
+                    descend(item);
+                }
+            }
+            else {
+                result.push(thing);
+            }
         }
     }
     descend(thing);
