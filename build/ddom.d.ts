@@ -1,9 +1,17 @@
 import * as _ from 'derivable';
-export declare function lifecycle(child: HTMLElement, reactor: _.Reactor<any>): any;
-export declare function lifecycle(child: HTMLElement, onMount: () => void, onUnmount: () => void): any;
-export declare const renderable: any;
-export declare function dom(tagName: string, props: any, ...children: any[]): HTMLElement;
-export declare function root(parent: HTMLElement, child: Node): void;
-export declare const React: {
-    createElement: (tagName: string, props: any, ...children: any[]) => HTMLElement;
-};
+declare module ddom {
+    type BehaviourAssigner = (node: HTMLElement) => _.Reactor<any>;
+    function lifecycle(child: HTMLElement, reactor: _.Reactor<any>): any;
+    function lifecycle(child: HTMLElement, onMount: () => void, onUnmount: () => void): any;
+    const renderable: any;
+    function dom(tagName: string, props: any, ...children: any[]): HTMLElement;
+    function root(parent: HTMLElement, child: Node): void;
+    const React: {
+        createElement: (tagName: string, props: any, ...children: any[]) => HTMLElement;
+    };
+    module behaviour {
+        function ShowWhen(when: _.Derivable<any>): BehaviourAssigner;
+        function HideWhen(when: _.Derivable<any>): BehaviourAssigner;
+    }
+}
+export = ddom;

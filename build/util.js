@@ -1,3 +1,4 @@
+var derivable_1 = require('derivable');
 function populateMatrix(a, b) {
     var matrix = [];
     for (var i = 0; i < b.length; i++) {
@@ -57,3 +58,22 @@ function entries(obj) {
     return ks.map(function (k) { return [k, obj[k]]; });
 }
 exports.entries = entries;
+function deepDeref(obj) {
+    if (derivable_1.isDerivable(obj)) {
+        return deepDeref(obj.get());
+    }
+    else if (obj instanceof Array) {
+        return obj.map(deepDeref);
+    }
+    else if (obj.constructor === Object) {
+        var result = {};
+        Object.keys(obj).forEach(function (k) {
+            result[k] = deepDeref(obj[k]);
+        });
+        return result;
+    }
+    else {
+        return obj;
+    }
+}
+exports.deepDeref = deepDeref;

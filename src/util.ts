@@ -1,4 +1,4 @@
-import { Atom, Derivable, isAtom, Lens } from 'derivable'
+import { Atom, Derivable, isAtom, Lens, isDerivable } from 'derivable'
 
 function populateMatrix(a: any[], b: any[]): number[][] {
   let matrix = [];
@@ -31,6 +31,7 @@ function backtrack(result: any[], matrix: number[][], a: any[], b: any[], i: num
   }
 }
 
+
 export function longestCommonSubsequence(a: any[], b: any[]): any[] {
   let result = [];
   backtrack(result, populateMatrix(a, b), a, b, b.length - 1, a.length - 1);
@@ -56,4 +57,20 @@ export function renderClass(obj: any) {
 export function entries(obj: any): [string, any][] {
     let ks = Object.keys(obj);
     return ks.map(k => <[string, any]>[k, obj[k]]);
+}
+
+export function deepDeref(obj: any): any {
+  if (isDerivable(obj)) {
+    return deepDeref(obj.get());
+  } else if (obj instanceof Array) {
+    return obj.map(deepDeref);
+  } else if (obj.constructor === Object) {
+    let result = {};
+    Object.keys(obj).forEach(k => {
+      result[k] = deepDeref(obj[k]);
+    });
+    return result;
+  } else {
+    return obj;
+  }
 }

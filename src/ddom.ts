@@ -4,41 +4,63 @@ import * as _ from 'derivable'
 // es6 type filler
 declare function Symbol(name: string);
 declare module Symbol { export const iterator: string };
+declare module Object {
+  export function assign(...objs: any[]): any;
+  export function keys(obj: any): string[];
+  export const prototype: Object;
+};
 
-const customPropertyHandlers = {
-  $class: function (node: HTMLElement, val) {
+/**
+ * ddom is DerivableDOM
+ */
+module ddom {
+/**
+ * Node modifier, for use with include
+ */
+export type BehaviourAssigner = (node: HTMLElement) => _.Reactor<any>;
+
+function applyBehvaiour(node:HTMLElement, b: BehaviourAssigner) {
+  let maybeReactor = b(node);
+  if (_.isReactor(maybeReactor)) {
+    lifecycle(node, maybeReactor);
+  }
+}
+
+const specialPropertyHandlers = {
+  class: function (node: HTMLElement, val) {
     if (!_.isDerivable(val)) {
       val = _.struct([val]);
     }
     const className = val.derive(util.renderClass);
     lifecycle(node, className.reactor(cn => node.className = cn));
   },
-  $style: function (node: HTMLElement, styles) {
-    for (let style of Object.keys(styles)) {
-      let val = styles[style];
-      if (_.isDerivable(val)) {
-        ((style, val) => {
-          lifecycle(node, val.reactor(v => node.style[style] = v));
-        })(style, val);
-      } else {
-        node.style[style] = val;
+  style: function (node: HTMLElement, styles) {
+    if (_.isDerivable(styles)) {
+      styles = styles.derive(util.deepDeref);
+      lifecycle(node, styles.reactor(styles => {
+        Object.assign(node.style, styles);
+      }));
+    } else {
+      for (let style of Object.keys(styles)) {
+        let val = styles[style];
+        if (_.isDerivable(val)) {
+          ((style, val) => {
+            lifecycle(node, val.reactor(v => node.style[style] = v));
+          })(style, val);
+        } else {
+          node.style[style] = val;
+        }
       }
     }
   },
-  $show: function (node: HTMLElement, val) {
-    if (_.isDerivable(val)) {
-      lifecycle(node, val.reactor(v => node.style.display = v ? null : 'none'));
+  behaviour: function (node: HTMLElement, behaviour: BehaviourAssigner[]) {
+    const apply = b => applyBehvaiour(node, b);
+    if (typeof behaviour === 'function') {
+      apply(behaviour);
     } else {
-      node.style.display = val ? null : 'none';
+      behaviour.forEach(apply);
     }
-  },
-  $hide: function (node: HTMLElement, val) {
-    if (_.isDerivable(val)) {
-      lifecycle(node, val.reactor(v => node.style.display = v ? 'none' : null));
-    } else {
-      node.style.display = val ? 'none' : null;
-    }
-  },
+  }
 }
 
 
@@ -200,13 +222,9 @@ export function dom(tagName: string, props: any, ...children: any[]): HTMLElemen
   if (props) {
     for (let key of Object.keys(props)) {
       let val = props[key];
-      if (key[0] === '$') {
-        let f = customPropertyHandlers[key];
-        if (!f) {
-          throw new Error("unrecognized special property: " + key);
-        } else {
-          f(result, val);
-        }
+      let special = specialPropertyHandlers[key];
+      if (special) {
+        special(result, val);
       } else {
         if (_.isDerivable(val)) {
           ((key, val) => {
@@ -292,3 +310,28 @@ export function root(parent: HTMLElement, child:Node) {
  * JSX support
  */
 export const React = {createElement: dom};
+
+export module behaviour {
+  /**
+   * Shows/hides a node based on whether when is truthy/falsey respectively
+   */
+  export function ShowWhen(when: _.Derivable<any>): BehaviourAssigner {
+    return node => when.reactor(condition => {
+      if (condition) {
+        node.style.display = null;
+      } else {
+        node.style.display = 'none';
+      }
+    });
+  }
+  /**
+   * Shows/hides a node based on whether when is falsey/truthy respectively
+   */
+  export function HideWhen(when: _.Derivable<any>): BehaviourAssigner {
+    return ShowWhen(when.not());
+  }
+}
+
+}
+
+export = ddom;
