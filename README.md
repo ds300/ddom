@@ -49,4 +49,4 @@ window.addEventListener('load', () => {
 So this updates the displayed time every second, shows/hides the div every quarter
 second, and wobbles about a bit, all just by updating the `time` atom.
 
-[have a look](https://ds300.github.com/ddom/test/)
+[have a look](https://ds300.github.com/ddom/test/test.html)
