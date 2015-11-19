@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ddom": "0.0.6",
     "derivable": "^0.10.0",
     "immutable": "^3.7.5"
   }

@@ -1,8 +1,8 @@
 {
   "name": "ddom",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "DerivableDOM as library",
-  "main": "src/ddom.js",
+  "main": "build/ddom.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
