@@ -1,7 +1,9 @@
-import * as _ from 'derivable'
-import * as I from 'immutable'
 import * as util from './util'
-import { ucmap } from './caching'
+import * as _ from 'derivable'
+
+// es6 type filler
+declare function Symbol(name: string);
+declare module Symbol { export const iterator: string };
 
 const customPropertyHandlers = {
   $class: function (node: HTMLElement, val) {
@@ -85,6 +87,11 @@ export function lifecycle(child: HTMLElement, onMount, onUnmount?) {
   }
 }
 
+/**
+ * Use this symbol to add custom rendering logic to your types.
+ * the assigned value should be a function and will be called with no args,
+ * it should return another renderable thing
+ */
 export const renderable = Symbol('ddom_renderable');
 
 function flattenKids (thing: any): any[] {
@@ -98,7 +105,7 @@ function flattenKids (thing: any): any[] {
         for (let i = 0; i < thing.length; i++) {
           descend(thing[i]);
         }
-      } else if (thing instanceof I.List) {
+      } else if (typeof thing.forEach === 'function') {
         thing.forEach(descend);
       } else if (typeof thing === 'string' || thing instanceof String) {
         result.push(thing);
@@ -119,32 +126,34 @@ function flattenKids (thing: any): any[] {
   return result;
 }
 
-function buildKidNodes (nodeCache: I.Map<string, Node[]>, kids: any[]): [Node[], I.Map<any, Node[]>] {
+type NodeCache = { [text: string]: Node[] };
+
+function buildKidNodes (nodeCache: NodeCache, kids: any[]): [Node[], NodeCache] {
   const result = [];
-  const newCache = I.Map<any, Node[]>().asMutable();
+  const newCache: NodeCache = {};
   for (let kid of kids) {
     if (kid instanceof Node) {
       result.push(kid)
     } else {
       const s = kid.toString()
       let node: Node;
-      const oldNodes = nodeCache.get(s);
+      const oldNodes = nodeCache[s];
       if (oldNodes && oldNodes.length > 0) {
         node = oldNodes.shift();
       }
       if (!node) {
         node = document.createTextNode(s);
       }
-      if (!newCache.has(s)) {
-        newCache.set(s, [node]);
+      if (!Object.prototype.hasOwnProperty.call(newCache, s)) {
+        newCache[s] = [node];
       } else {
-        newCache.get(s).push(node);
+        newCache[s].push(node);
       }
       result.push(node);
     }
   }
 
-  return [result, newCache.asImmutable()];
+  return [result, newCache];
 }
 
 function remove(kid: ChildNode) {
@@ -177,7 +186,9 @@ function buildTree(nodes: Node[]) {
 
 
 /**
- * Creates a VDOM node from the given spec. jsx pluggable
+ * Create dom nodes from tag name, props, and children. Hooks up derivables
+ * to reactions which themselves are hooked into the lifecycle of the returned
+ * dom node.
  */
 export function dom(tagName: string, props: any, ...children: any[]): HTMLElement {
   if (typeof tagName !== 'string') {
@@ -209,7 +220,7 @@ export function dom(tagName: string, props: any, ...children: any[]): HTMLElemen
   }
 
   if (children.length) {
-    let textNodeCache = I.Map<string, Node[]>();
+    let textNodeCache: NodeCache = {};
     result[KIDS] = _.derivation(() => flattenKids(children)).derive(items => {
       let [nodes, newCache] = buildKidNodes(textNodeCache, items);
       textNodeCache = newCache;
@@ -260,7 +271,9 @@ function processTree(tree) {
   }
 }
 
-
+/**
+ * Inserts a ddom-rendered node into the regular dom, using appendChild
+ */
 export function root(parent: HTMLElement, child:Node) {
   parent.appendChild(child);
   if (child instanceof HTMLElement) {
@@ -274,3 +287,8 @@ export function root(parent: HTMLElement, child:Node) {
     }
   }
 }
+
+/**
+ * JSX support
+ */
+export const React = {createElement: dom};

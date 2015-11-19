@@ -1,4 +1,3 @@
-import { List, Map, OrderedSet } from 'immutable'
 import { Atom, Derivable, isAtom, Lens } from 'derivable'
 
 function populateMatrix(a: any[], b: any[]): number[][] {
@@ -43,8 +42,6 @@ export function renderClass(obj: any) {
     return obj.map(renderClass).join(" ");
   } else if (typeof obj === 'string' || obj instanceof String) {
     return obj;
-  } else if (obj instanceof Map) {
-    return (<Map<any, boolean>>obj).map((v, k) => v ? renderClass(k) : "").join(" ");
   } else {
     let result = "";
     for (let k of Object.keys(obj)) {
@@ -56,12 +53,7 @@ export function renderClass(obj: any) {
   }
 }
 
-export function entries<K, V>(obj: Map<K, V>): List<[K, V]>;
-export function entries(obj: any): List<[string, any]> {
-  if (obj instanceof Map) {
-    return obj.entrySeq().toList();
-  } else {
+export function entries(obj: any): [string, any][] {
     let ks = Object.keys(obj);
-    return List(<[string, any][]>ks.map(k => [k, obj[k]]));
-  }
+    return ks.map(k => <[string, any]>[k, obj[k]]);
 }
