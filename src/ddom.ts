@@ -17,12 +17,12 @@ module ddom {
 /**
  * Node modifier, for use with include
  */
-export type BehaviourAssigner = (node: HTMLElement) => _.Reactor<any>;
+export type BehaviourAssigner = (node: HTMLElement) => _.Reactor<any> | void;
 
 function applyBehvaiour(node:HTMLElement, b: BehaviourAssigner) {
   let maybeReactor = b(node);
   if (_.isReactor(maybeReactor)) {
-    lifecycle(node, maybeReactor);
+    lifecycle(node, <_.Reactor<any>>maybeReactor);
   }
 }
 
@@ -312,6 +312,7 @@ export function root(parent: HTMLElement, child:Node) {
 export const React = {createElement: dom};
 
 export module behaviour {
+  const identity = x => x;
   /**
    * Shows/hides a node based on whether when is truthy/falsey respectively
    */
@@ -329,6 +330,50 @@ export module behaviour {
    */
   export function HideWhen(when: _.Derivable<any>): BehaviourAssigner {
     return ShowWhen(when.not());
+  }
+
+  export function BindValue(atom: _.Atom<any>): BehaviourAssigner {
+    return node => {
+      if ((node instanceof HTMLInputElement)
+          || node instanceof HTMLTextAreaElement
+          || node instanceof HTMLSelectElement) {
+        node.addEventListener('input', () => {
+          atom.set((<HTMLInputElement>node).value);
+        });
+      } else {
+        throw new Error('BindValue only works with input, textarea, and select');
+      }
+    }
+  }
+
+  export function Value(): [_.Derivable<string>, BehaviourAssigner] {
+    const atom = _.atom(null);
+
+    return [atom.derive(identity), BindValue(atom)];
+  }
+
+  export function BindFocus(atom: _.Atom<any>): BehaviourAssigner {
+    return node => {
+      node.addEventListener('focus', () => atom.set(true));
+      node.addEventListener('blur', () => atom.set(false));
+    }
+  }
+
+  export function Focus(): [_.Derivable<boolean>, BehaviourAssigner] {
+    const atom = _.atom(false);
+    return [atom.derive(identity), BindFocus(atom)];
+  }
+
+  export function BindHover(atom: _.Atom<any>): BehaviourAssigner {
+    return node => {
+      node.addEventListener('mouseover', () => atom.set(true));
+      node.addEventListener('mouseout', () => atom.set(false));
+    }
+  }
+
+  export function Hover(): [_.Derivable<boolean>, BehaviourAssigner] {
+    const atom = _.atom(false);
+    return [atom.derive(identity), BindHover(atom)];
   }
 }
 

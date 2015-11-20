@@ -1,13 +1,15 @@
-import {React, root, behaviour} from 'ddom'
-import {atom} from 'derivable'
+import {React, root, behaviour} from '../build/ddom'
+import {atom} from '../node_modules/derivable'
 
-const $Time = atom(+new Date());
-setInterval(() => $Time.set(+new Date()), 16);
+const {ShowWhen, BindValue} = behaviour;
+
+const $Time = atom(Date.now());
+setInterval(() => $Time.set(Date.now()), 16);
 
 const $seconds = $Time.derive(t => t - (t % 1000));
 
 // blink on/off every quarter second
-const blink = behaviour.ShowWhen($Time.derive(t => Math.round(t/250) % 2 == 0));
+const blink = ShowWhen($Time.derive(t => Math.round(t/250) % 2 == 0));
 
 // custom behaviour
 function TranslateX ($amount) {
@@ -27,6 +29,34 @@ const page = (
   </div>
 );
 
+const $Name = atom("");
+const $Bio = atom("");
+const $Age = atom(0);
+const form = (
+  <div>
+    <input type='text' behaviour={BindValue($Name)}></input>
+    <br />
+    <textarea behaviour={BindValue($Bio)}></textarea>
+    <br />
+    <select behaviour={BindValue($Age)}>
+      <option value={1}>1</option>
+      <option value={2}>2</option>
+      <option value={3}>3</option>
+    </select>
+  </div>
+);
+const [$hovering, hover] = behaviour.Hover();
+const junk = (
+  <div behaviour={hover}>
+    <div>the name is {$Name}</div>
+    <div>the bio is {$Bio}</div>
+    <div>the age is {$Age.derive(a => a + 50)}</div>
+    <div behaviour={ShowWhen($hovering)}>hovering yo</div>
+  </div>
+);
+
 window.addEventListener('load', () => {
   root(document.body, page);
+  root(document.body, form);
+  root(document.body, junk);
 })

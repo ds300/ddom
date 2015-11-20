@@ -1,6 +1,6 @@
 {
   "name": "ddom",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "DerivableDOM as library",
   "main": "build/ddom.js",
   "scripts": {

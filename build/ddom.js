@@ -275,6 +275,7 @@ var ddom;
     ddom.React = { createElement: dom };
     var behaviour;
     (function (behaviour) {
+        var identity = function (x) { return x; };
         function ShowWhen(when) {
             return function (node) { return when.reactor(function (condition) {
                 if (condition) {
@@ -290,6 +291,50 @@ var ddom;
             return ShowWhen(when.not());
         }
         behaviour.HideWhen = HideWhen;
+        function BindValue(atom) {
+            return function (node) {
+                if ((node instanceof HTMLInputElement)
+                    || node instanceof HTMLTextAreaElement
+                    || node instanceof HTMLSelectElement) {
+                    node.addEventListener('input', function () {
+                        atom.set(node.value);
+                    });
+                }
+                else {
+                    throw new Error('BindValue only works with input, textarea, and select');
+                }
+            };
+        }
+        behaviour.BindValue = BindValue;
+        function Value() {
+            var atom = _.atom(null);
+            return [atom.derive(identity), BindValue(atom)];
+        }
+        behaviour.Value = Value;
+        function BindFocus(atom) {
+            return function (node) {
+                node.addEventListener('focus', function () { return atom.set(true); });
+                node.addEventListener('blur', function () { return atom.set(false); });
+            };
+        }
+        behaviour.BindFocus = BindFocus;
+        function Focus() {
+            var atom = _.atom(false);
+            return [atom.derive(identity), BindFocus(atom)];
+        }
+        behaviour.Focus = Focus;
+        function BindHover(atom) {
+            return function (node) {
+                node.addEventListener('mouseover', function () { return atom.set(true); });
+                node.addEventListener('mouseout', function () { return atom.set(false); });
+            };
+        }
+        behaviour.BindHover = BindHover;
+        function Hover() {
+            var atom = _.atom(false);
+            return [atom.derive(identity), BindHover(atom)];
+        }
+        behaviour.Hover = Hover;
     })(behaviour = ddom.behaviour || (ddom.behaviour = {}));
 })(ddom || (ddom = {}));
 module.exports = ddom;

@@ -276,6 +276,7 @@ var ddom;
     ddom.React = { createElement: dom };
     var behaviour;
     (function (behaviour) {
+        var identity = function (x) { return x; };
         function ShowWhen(when) {
             return function (node) { return when.reactor(function (condition) {
                 if (condition) {
@@ -291,6 +292,50 @@ var ddom;
             return ShowWhen(when.not());
         }
         behaviour.HideWhen = HideWhen;
+        function BindValue(atom) {
+            return function (node) {
+                if ((node instanceof HTMLInputElement)
+                    || node instanceof HTMLTextAreaElement
+                    || node instanceof HTMLSelectElement) {
+                    node.addEventListener('input', function () {
+                        atom.set(node.value);
+                    });
+                }
+                else {
+                    throw new Error('BindValue only works with input, textarea, and select');
+                }
+            };
+        }
+        behaviour.BindValue = BindValue;
+        function Value() {
+            var atom = _.atom(null);
+            return [atom.derive(identity), BindValue(atom)];
+        }
+        behaviour.Value = Value;
+        function BindFocus(atom) {
+            return function (node) {
+                node.addEventListener('focus', function () { return atom.set(true); });
+                node.addEventListener('blur', function () { return atom.set(false); });
+            };
+        }
+        behaviour.BindFocus = BindFocus;
+        function Focus() {
+            var atom = _.atom(false);
+            return [atom.derive(identity), BindFocus(atom)];
+        }
+        behaviour.Focus = Focus;
+        function BindHover(atom) {
+            return function (node) {
+                node.addEventListener('mouseover', function () { return atom.set(true); });
+                node.addEventListener('mouseout', function () { return atom.set(false); });
+            };
+        }
+        behaviour.BindHover = BindHover;
+        function Hover() {
+            var atom = _.atom(false);
+            return [atom.derive(identity), BindHover(atom)];
+        }
+        behaviour.Hover = Hover;
     })(behaviour = ddom.behaviour || (ddom.behaviour = {}));
 })(ddom || (ddom = {}));
 module.exports = ddom;
@@ -1609,12 +1654,13 @@ exports['default'] = exports;
 
 
 },{}],4:[function(require,module,exports){
-var ddom_1 = require('ddom');
-var derivable_1 = require('derivable');
-var $Time = derivable_1.atom(+new Date());
-setInterval(function () { return $Time.set(+new Date()); }, 16);
+var ddom_1 = require('../build/ddom');
+var derivable_1 = require('../node_modules/derivable');
+var ShowWhen = ddom_1.behaviour.ShowWhen, BindValue = ddom_1.behaviour.BindValue;
+var $Time = derivable_1.atom(Date.now());
+setInterval(function () { return $Time.set(Date.now()); }, 16);
 var $seconds = $Time.derive(function (t) { return t - (t % 1000); });
-var blink = ddom_1.behaviour.ShowWhen($Time.derive(function (t) { return Math.round(t / 250) % 2 == 0; }));
+var blink = ShowWhen($Time.derive(function (t) { return Math.round(t / 250) % 2 == 0; }));
 function TranslateX($amount) {
     return function (node) { return $amount.reactor(function (x) {
         node.style.transform = "translateX(" + x + ")";
@@ -1622,8 +1668,16 @@ function TranslateX($amount) {
 }
 var wobble = TranslateX($Time.derive(function (t) { return (Math.sin(t / 300) * 40) + "px"; }));
 var page = (ddom_1.React.createElement("div", {"behaviour": [blink, wobble]}, "The time is now ", $seconds.derive(function (t) { return new Date(t).toString(); })));
+var $Name = derivable_1.atom("");
+var $Bio = derivable_1.atom("");
+var $Age = derivable_1.atom(0);
+var form = (ddom_1.React.createElement("div", null, ddom_1.React.createElement("input", {"type": 'text', "behaviour": BindValue($Name)}), ddom_1.React.createElement("br", null), ddom_1.React.createElement("textarea", {"behaviour": BindValue($Bio)}), ddom_1.React.createElement("br", null), ddom_1.React.createElement("select", {"behaviour": BindValue($Age)}, ddom_1.React.createElement("option", {"value": 1}, "1"), ddom_1.React.createElement("option", {"value": 2}, "2"), ddom_1.React.createElement("option", {"value": 3}, "3"))));
+var _a = ddom_1.behaviour.Hover(), $hovering = _a[0], hover = _a[1];
+var junk = (ddom_1.React.createElement("div", {"behaviour": hover}, ddom_1.React.createElement("div", null, "the name is ", $Name), ddom_1.React.createElement("div", null, "the bio is ", $Bio), ddom_1.React.createElement("div", null, "the age is ", $Age.derive(function (a) { return a + 50; })), ddom_1.React.createElement("div", {"behaviour": ShowWhen($hovering)}, "hovering yo")));
 window.addEventListener('load', function () {
     ddom_1.root(document.body, page);
+    ddom_1.root(document.body, form);
+    ddom_1.root(document.body, junk);
 });
 
-},{"ddom":1,"derivable":3}]},{},[4]);
+},{"../build/ddom":1,"../node_modules/derivable":3}]},{},[4]);
